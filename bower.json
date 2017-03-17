@@ -1,0 +1,21 @@
+{
+  "name": "wp-nginx-wizard",
+  "authors": [
+    "Rahul Bansal <rahul.bansal@rtcamp.com>"
+  ],
+  "description": "",
+  "main": "",
+  "license": "MIT",
+  "homepage": "",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "mustache.js": "mustache#^2.3.0",
+    "handlebars": "^4.0.5"
+  }
+}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>WordPress Nginx Config generation</title>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/3.2.0/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/mustache.js/2.3.0/mustache.min.js"></script>
+
+    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery.serializeJSON/2.7.2/jquery.serializejson.min.js"></script>
+
+    <link href="assets/prism.css" rel="stylesheet" />
+    <script src="assets/prism.js"></script>
+
+    <script src="app.js"></script>
+
+</head>
+
+<body>
+    <h1>WordPress Nginx Config Wizard</h1>
+
+    <form id="wizard">
+        <label>Domain Name: <input type="text" name="domain" value="easyengine.io"/></label>
+        <fieldset>
+            <legend>Which WordPress Type?</legend>
+            <label><input type="radio" name="wp" value="single">Single WordPress</label>
+            <label><input type="radio" name="wp" value="subdomain">Multisite + Subdomain</label>
+            <label><input type="radio" name="wp" value="subdir">Multisite + Subdir</label>
+        </fieldset>
+        <fieldset>
+            <legend>Which Cache Type You need?</legend>
+            <label><input type="radio" name="cache" value="none">None (static file expiry only)</label>
+            <label><input type="radio" name="cache" value="w3tc">W3 Total Cache</label>
+            <label><input type="radio" name="cache" value="wpsc">WP Super Cache</label>
+            <label><input type="radio" name="cache" value="wpfc">NGINX FastCGI</label>
+            <label><input type="radio" name="cache" value="wpredis">NGINX Redis</label>
+        </fieldset>
+        <fieldset>
+            <legend>PHP Version?</legend>
+            <label><input type="radio" name="php" value="php7">PHP 7.x</label>
+            <label><input type="radio" name="php" value="php">PHP 5.x</label>
+        </fieldset>
+    </form>
+
+    <pre id="target"><code class="language-nginx"></code></pre>
+
+</body>
+
+</html>

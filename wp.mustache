@@ -1,0 +1,173 @@
+{{#isCacheFastCGI}}
+#move next 4 lines to /etc/nginx/nginx.conf if you want to use fastcgi_cache across many sites
+fastcgi_cache_path /var/run/nginx-cache levels=1:2 keys_zone=WORDPRESS:100m inactive=60m;
+fastcgi_cache_key "$scheme$request_method$host$request_uri";
+fastcgi_cache_use_stale error timeout invalid_header http_500;
+fastcgi_ignore_headers Cache-Control Expires Set-Cookie;
+{{/isCacheFastCGI}}
+
+server {
+
+    {{#isDomainMapping}}
+        listen 80 default_server;
+        server_name_in_redirect off;
+        server_name _ ;
+    {{/isDomainMapping}}
+
+    {{#isMUSubDomain}}
+        server_name {{domain}} *.{{domain}};
+    {{/isMUSubDomain}}
+
+    {{^isMUSubDomain}}
+        server_name {{domain}} www.{{domain}};
+    {{/isMUSubDomain}}
+
+	    access_log   /var/log/nginx/{{domain}}.access.log;
+	    error_log    /var/log/nginx/{{domain}}.error.log;
+
+        root /var/www/{{domain}}/htdocs;
+        index index.php;
+
+    {{#isMUSubDir}}
+        if (!-e $request_filename) {
+    		rewrite /wp-admin$ $scheme://$host$uri/ permanent;
+    		rewrite ^(/[^/]+)?(/wp-.*) $2 last;
+    		rewrite ^(/[^/]+)?(/.*\.php) $2 last;
+	    }
+    {{#isMUSubDir}}
+
+    {{#isCacheNGINX}}
+        set $skip_cache 0;
+
+        # POST requests and urls with a query string should always go to PHP
+    	if ($request_method = POST) {
+    		set $skip_cache 1;
+    	}
+    	if ($query_string != "") {
+    		set $skip_cache 1;
+    	}
+
+    	# Don't cache uris containing the following segments
+    	if ($request_uri ~* "/wp-admin/|/xmlrpc.php|wp-.*.php|/feed/|index.php|sitemap(_index)?.xml") {
+    		set $skip_cache 1;
+    	}
+
+    	# Don't use the cache for logged in users or recent commenters
+    	if ($http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_no_cache|wordpress_logged_in") {
+    		set $skip_cache 1;
+    	}
+    {{/isCacheNGINX}}
+
+    {{#isCacheWPPlugin}}
+        set $cache_uri $request_uri;
+
+    	# POST requests and urls with a query string should always go to PHP
+    	if ($request_method = POST) {
+    		set $cache_uri 'null cache';
+    	}
+    	if ($query_string != "") {
+    		set $cache_uri 'null cache';
+    	}
+
+    	# Don't cache uris containing the following segments
+    	if ($request_uri ~* "(/wp-admin/|/xmlrpc.php|/wp-(app|cron|login|register|mail).php|wp-.*.php|/feed/|index.php|wp-comments-popup.php|wp-links-opml.php|wp-locations.php|sitemap(_index)?.xml|[a-z0-9_-]+-sitemap([0-9]+)?.xml)") {
+    		set $cache_uri 'null cache';
+    	}
+
+    	# Don't use the cache for logged in users or recent commenters
+    	if ($http_cookie ~* "comment_author|wordpress_[a-f0-9]+|wp-postpass|wordpress_logged_in") {
+    		set $cache_uri 'null cache';
+    	}
+    {{/isCacheWPPlugin}}
+
+    {{#isCacheWPSuperCache}}
+    	# Use cached or actual file if they exists, otherwise pass request to WordPress
+    	location / {
+    		try_files /wp-content/cache/supercache/$http_host/$cache_uri/index.html $uri $uri/ /index.php ;
+    	}
+    {{/isCacheWPSuperCache}}
+
+
+    {{#isCacheWT3C}}
+	    location / {
+		         try_files /wp-content/cache/page_enhanced/${host}${cache_uri}_index.html $uri $uri/ /index.php?$args ;
+	    }
+        location ~ ^/wp-content/cache/minify/[^/]+/(.*)$ {
+                try_files $uri /wp-content/plugins/w3-total-cache/pub/minify.php?file=$1;
+        }
+    {{/isCacheWT3C}}
+
+
+    {{^isCacheWPPlugin}}
+        location / {
+                try_files $uri $uri/ /index.php?$args;
+        }
+    {{/isCacheWPPlugin}}
+
+    {{#isCacheRedis}}
+        location /redis-fetch {
+            internal  ;
+            set  $redis_key $args;
+            redis_pass  127.0.0.1:6379;
+        }
+
+        location /redis-store {
+            internal  ;
+            set_unescape_uri $key $arg_key ;
+            redis2_query  set $key $echo_request_body;
+            redis2_query expire $key 14400;
+            redis2_pass  127.0.0.1:6379;
+        }
+    {{/isCacheRedis}}
+
+        location ~ \.php$ {
+            {{#isCacheRedis}}
+                set $key "nginx-cache:$scheme$request_method$host$request_uri";
+
+                srcache_fetch_skip $skip_cache;
+                srcache_store_skip $skip_cache;
+
+                srcache_response_cache_control off;
+
+                set_escape_uri $escaped_key $key;
+
+                srcache_fetch GET /redis-fetch $key;
+                srcache_store PUT /redis-store key=$escaped_key;
+
+                more_set_headers 'X-Cache $srcache_fetch_status';
+                more_set_headers 'X-Cache-2 $srcache_store_status';
+            {{/isCacheRedis}}
+
+                try_files $uri =404;
+                include fastcgi_params;
+                fastcgi_pass {{php}};
+
+            {{#isCacheFastCGI}}
+        		fastcgi_cache_bypass $skip_cache;
+        	    fastcgi_no_cache $skip_cache;
+
+        		fastcgi_cache WORDPRESS;
+        		fastcgi_cache_valid  60m;
+            {{/isCacheFastCGI}}
+        }
+
+    {{#isCacheFastCGI}}
+        location ~ /purge(/.*) {
+            fastcgi_cache_purge WORDPRESS "$scheme$request_method$host$1";
+        }
+    {{/isCacheFastCGI}}
+
+        <!-- will always come except no cache is used cache!=none -->
+        location ~* ^.+\.(ogg|ogv|svg|svgz|eot|otf|woff|mp4|ttf|rss|atom|jpg|jpeg|gif|png|ico|zip|tgz|gz|rar|bz2|doc|xls|exe|ppt|tar|mid|midi|wav|bmp|rtf)$ {
+            access_log off;	log_not_found off; expires max;
+        }
+
+        <!-- will always come -->
+        location = /robots.txt { access_log off; log_not_found off; }
+        location ~ /\. { deny  all; access_log off; log_not_found off; }
+
+        {{#isCacheWPSuperCache}}
+            location ^~ /wp-content/cache/ { deny  all; access_log off; log_not_found off; }
+        {{/isCacheWPSuperCache}}
+
+}
